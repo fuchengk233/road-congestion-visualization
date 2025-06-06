@@ -1,11 +1,11 @@
 {
   "files": {
-    "main.css": "/road-congestion-visualization/static/css/main.dcdb8631.css",
-    "main.js": "/road-congestion-visualization/static/js/main.5d35c7e1.js",
+    "main.css": "/road-congestion-visualization/static/css/main.4ef18db0.css",
+    "main.js": "/road-congestion-visualization/static/js/main.f73877a6.js",
     "index.html": "/road-congestion-visualization/index.html"
   },
   "entrypoints": [
-    "static/css/main.dcdb8631.css",
-    "static/js/main.5d35c7e1.js"
+    "static/css/main.4ef18db0.css",
+    "static/js/main.f73877a6.js"
   ]
 }
