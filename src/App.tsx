@@ -6,7 +6,7 @@ import dayjs from 'dayjs';
 import './App.css';
 
 // 导入数据
-import { data as roadData, type RoadData } from '../data';
+import { data as roadData, type RoadData } from './data';
 import { congestionData, type CongestionData } from './yongdu';
 
 // 定义地图容器类型
