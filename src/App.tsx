@@ -7,7 +7,7 @@ import './App.css';
 
 // 导入数据
 import { data as roadData, type RoadData } from './data';
-import { congestionData, type CongestionData } from './yongdu';
+import { congestionData } from './yongdu';
 
 // 定义地图容器类型
 interface MapContainer extends HTMLElement {
@@ -34,8 +34,10 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [selectedRoadId, setSelectedRoadId] = useState<string | null>(null);
-  const [hoveredRoadId, setHoveredRoadId] = useState<string | null>(null);
-  const [selectedTime, setSelectedTime] = useState<Dayjs>(dayjs('2019-09-01 00:00'));
+  const [selectedTime, setSelectedTime] = useState<Dayjs>(() => {
+    const initialTime = dayjs('2019-09-01 00:00');
+    return initialTime.isValid() ? initialTime : dayjs();
+  });
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const mapInstanceRef = useRef<any>(null);
@@ -221,7 +223,6 @@ function App() {
         strokeOpacity: 1
       });
     }
-    setHoveredRoadId(roadId);
   }, []);
 
   // 处理鼠标移出事件
@@ -252,7 +253,6 @@ function App() {
         });
       }
     }
-    setHoveredRoadId(null);
   }, [selectedTime, parsedRoadData]);
 
   // 处理路段点击事件
@@ -308,7 +308,8 @@ function App() {
     });
     infoWindow.open(mapInstanceRef.current, e.lnglat);
     setSelectedRoadId(road.ID);
-  }, [selectedTime]);
+    addDebugInfo(`点击路段: ${road.ID}`);
+  }, [selectedTime, addDebugInfo]);
 
   // 更新路段样式
   const updateRoadStyle = useCallback((roadId: string, polyline: any) => {
@@ -398,41 +399,33 @@ function App() {
   // 处理时间选择
   const handleTimeChange = useCallback((time: Dayjs | null) => {
     if (time) {
-      setSelectedTime(time);
-      addDebugInfo(`选择时间: ${time.format('YYYY-MM-DD HH:mm')}`);
-      // 只更新路段样式，不重新加载地图
-      if (mapInstanceRef.current) {
-        updateRoadStyles(time);
+      try {
+        setSelectedTime(time);
+        addDebugInfo(`选择时间: ${time.format('YYYY-MM-DD HH:mm')}`);
+        if (mapInstanceRef.current) {
+          updateRoadStyles(time);
+        }
+      } catch (error) {
+        console.error('时间选择错误:', error);
+        addDebugInfo('时间选择出错，请重试');
       }
     }
-  }, [updateRoadStyles]);
+  }, [addDebugInfo, updateRoadStyles]);
 
   // 禁用日期
-  const disabledDate = useCallback((current: Dayjs) => {
-    return current && (current < dayjs('2019-09-01') || current > dayjs('2019-09-30'));
-  }, []);
+  const disabledDate = (current: Dayjs) => {
+    return current && (
+      current.isBefore(dayjs('2019-09-01')) ||
+      current.isAfter(dayjs('2019-09-30'))
+    );
+  };
 
   // 禁用时间
-  const disabledDateTime = useCallback((current: Dayjs) => {
-    if (current && current.date() === 1) {
-      return {
-        disabledHours: () => Array.from({ length: 24 }, (_, i) => i).filter(h => h < 0 || h > 23),
-        disabledMinutes: () => Array.from({ length: 60 }, (_, i) => i).filter(m => m < 0 || m > 59)
-      };
-    }
-    return {
-      disabledHours: () => [],
-      disabledMinutes: () => []
-    };
-  }, []);
-
-  // 禁用分钟
-  const disabledMinutes = useCallback((hour: number) => {
-    if (selectedTime && selectedTime.date() === 1) {
-      return Array.from({ length: 60 }, (_, i) => i).filter(m => m < 0 || m > 59);
-    }
-    return [];
-  }, [selectedTime]);
+  const disabledMinutes = () => {
+    return Array.from({ length: 60 }, (_, i) => i).filter(
+      minute => minute % 10 !== 0
+    );
+  };
 
   // 初始化地图
   useEffect(() => {
@@ -614,7 +607,7 @@ function App() {
       }
       polylinesRef.current = {};
     };
-  }, [parsedRoadData, addDebugInfo, handleRoadClick, handleMouseOver, handleMouseOut]);
+  }, [parsedRoadData, addDebugInfo, handleRoadClick, handleMouseOver, handleMouseOut, updateRoadStyles]);
 
   return (
     <div className="app-container">
@@ -624,15 +617,17 @@ function App() {
             format: 'HH:mm',
             minuteStep: 10,
             disabledMinutes,
-            hideDisabledOptions: true,
+            hideDisabledOptions: true
+          }}
+          style={{
+            width: 200,
+            marginRight: 16
           }}
           format="YYYY-MM-DD HH:mm"
           value={selectedTime}
           onChange={handleTimeChange}
           disabledDate={disabledDate}
-          disabledTime={disabledDateTime}
           allowClear={false}
-          placeholder="选择时间"
         />
       </div>
       <div id="container" className="map-container"></div>
