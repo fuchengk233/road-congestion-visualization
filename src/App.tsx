@@ -43,6 +43,83 @@ function App() {
   const mapInstanceRef = useRef<any>(null);
   const polylinesRef = useRef<{ [key: string]: any }>({});
 
+  // 使用 useRef 存储回调函数
+  const callbacksRef = useRef({
+    handleRoadClick: (road: RoadData, polyline: any, e: any) => {
+      if (!mapInstanceRef.current) return;
+
+      const timeStr = selectedTime.format('YYYY-MM-DD HH:mm');
+      const currentCongestion = congestionData.find(d => d.ts === timeStr);
+      const congestionValue = currentCongestion ? currentCongestion[road.ID] : undefined;
+      const congestionIndex = typeof congestionValue === 'string' ? Number(congestionValue) : undefined;
+      
+      // 获取拥堵状态描述
+      let congestionStatus = '暂无数据';
+      let congestionColor = '#999999';
+      if (typeof congestionIndex === 'number' && !isNaN(congestionIndex)) {
+        if (congestionIndex < 2) {
+          congestionStatus = '畅通';
+          congestionColor = '#52C41A';
+        } else if (congestionIndex < 4) {
+          congestionStatus = '轻度拥堵';
+          congestionColor = '#FAAD14';
+        } else if (congestionIndex < 6) {
+          congestionStatus = '中度拥堵';
+          congestionColor = '#FF7A45';
+        } else {
+          congestionStatus = '严重拥堵';
+          congestionColor = '#FF4D4F';
+        }
+      }
+
+      const infoWindow = new window.AMap.InfoWindow({
+        content: `
+          <div style="padding: 10px; min-width: 200px;">
+            <h3 style="margin: 0 0 10px 0; color: ${congestionColor};">${road.NAME}</h3>
+            <p style="margin: 5px 0;"><strong>方向：</strong>${road.DIRECTION}</p>
+            <p style="margin: 5px 0;"><strong>起点：</strong>${road.FNAME || '未知'}</p>
+            <p style="margin: 5px 0;"><strong>终点：</strong>${road.TNAME || '未知'}</p>
+            <p style="margin: 5px 0;"><strong>长度：</strong>${(Number(road.LENGTH) / 1000).toFixed(2)}公里</p>
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
+              <p style="margin: 5px 0;"><strong>当前时间：</strong>${timeStr}</p>
+              <p style="margin: 5px 0;">
+                <strong>拥堵状态：</strong>
+                <span style="color: ${congestionColor}; font-weight: bold;">
+                  ${congestionStatus}
+                  ${typeof congestionIndex === 'number' && !isNaN(congestionIndex) ? `(${congestionIndex.toFixed(1)})` : ''}
+                </span>
+              </p>
+            </div>
+          </div>
+        `,
+        offset: new window.AMap.Pixel(0, -30)
+      });
+
+      infoWindow.open(mapInstanceRef.current, e.lnglat);
+      setSelectedRoadId(road.ID);
+    },
+    handleMouseOver: (roadId: string) => {
+      Object.entries(polylinesRef.current).forEach(([key, polyline]) => {
+        if (key.startsWith(roadId)) {
+          polyline.setOptions({
+            strokeWeight: 8,
+            strokeOpacity: 1
+          });
+        }
+      });
+    },
+    handleMouseOut: (roadId: string) => {
+      Object.entries(polylinesRef.current).forEach(([key, polyline]) => {
+        if (key.startsWith(roadId)) {
+          polyline.setOptions({
+            strokeWeight: 5,
+            strokeOpacity: 0.9
+          });
+        }
+      });
+    }
+  });
+
   // 添加调试信息函数
   const addDebugInfo = useCallback((message: string) => {
     setDebugInfo(prev => {
@@ -213,104 +290,6 @@ function App() {
     }
   }, [roadData, addDebugInfo, parseWKT]);
 
-  // 处理鼠标悬停事件
-  const handleMouseOver = useCallback((roadId: string) => {
-    const polyline = polylinesRef.current[roadId];
-    if (polyline) {
-      polyline.setOptions({
-        strokeWeight: 7,
-        strokeColor: '#FF7875',
-        strokeOpacity: 1
-      });
-    }
-  }, []);
-
-  // 处理鼠标移出事件
-  const handleMouseOut = useCallback((roadId: string) => {
-    const polyline = polylinesRef.current[roadId];
-    if (polyline) {
-      const road = parsedRoadData.find(r => r.ID === roadId);
-      if (road) {
-        const timeStr = selectedTime.format('YYYY-MM-DD HH:mm');
-        const currentCongestion = congestionData.find(d => d.ts === timeStr);
-        const congestionIndex = Number(currentCongestion?.[roadId]);
-        
-        let color = '#FF4D4F';
-        if (!isNaN(congestionIndex)) {
-          if (congestionIndex < 2) {
-            color = '#52C41A';
-          } else if (congestionIndex < 4) {
-            color = '#FAAD14';
-          } else if (congestionIndex < 6) {
-            color = '#FF7A45';
-          }
-        }
-
-        polyline.setOptions({
-          strokeWeight: 5,
-          strokeColor: color,
-          strokeOpacity: 0.9
-        });
-      }
-    }
-  }, [selectedTime, parsedRoadData]);
-
-  // 处理路段点击事件
-  const handleRoadClick = useCallback((road: RoadData & { segments: number[][][] }, polyline: any, e: MapEvent) => {
-    const timeStr = selectedTime.format('YYYY-MM-DD HH:mm');
-    const currentCongestion = congestionData.find(d => d.ts === timeStr);
-    const congestionValue = currentCongestion ? currentCongestion[road.ID] : undefined;
-    const congestionIndex = typeof congestionValue === 'string' ? Number(congestionValue) : undefined;
-    
-    // 获取拥堵状态描述
-    let congestionStatus = '暂无数据';
-    let congestionColor = '#999999';
-    if (typeof congestionIndex === 'number' && !isNaN(congestionIndex)) {
-      if (congestionIndex < 2) {
-        congestionStatus = '畅通';
-        congestionColor = '#52C41A';
-      } else if (congestionIndex < 4) {
-        congestionStatus = '轻度拥堵';
-        congestionColor = '#FAAD14';
-      } else if (congestionIndex < 6) {
-        congestionStatus = '中度拥堵';
-        congestionColor = '#FF7A45';
-      } else {
-        congestionStatus = '严重拥堵';
-        congestionColor = '#FF4D4F';
-      }
-    }
-
-    const infoWindow = new window.AMap.InfoWindow({
-      content: `
-        <div style="padding: 10px; min-width: 200px;">
-          <h3 style="margin: 0 0 10px 0; color: #FF4D4F;">${road.NAME}</h3>
-          <p style="margin: 5px 0;"><strong>方向：</strong>${road.DIRECTION}</p>
-          <p style="margin: 5px 0;"><strong>起点：</strong>${road.FNAME || '未知'}</p>
-          <p style="margin: 5px 0;"><strong>终点：</strong>${road.TNAME || '未知'}</p>
-          <p style="margin: 5px 0;"><strong>长度：</strong>${(Number(road.LENGTH) / 1000).toFixed(2)}公里</p>
-          <p style="margin: 5px 0;"><strong>线段数量：</strong>${road.segments.length}</p>
-          <p style="margin: 5px 0;"><strong>总坐标点数量：</strong>${road.segments.reduce((sum, seg) => sum + seg.length, 0)}</p>
-          <p style="margin: 5px 0;"><strong>路段ID：</strong>${road.ID}</p>
-          <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
-            <p style="margin: 5px 0;"><strong>当前时间：</strong>${timeStr}</p>
-            <p style="margin: 5px 0;">
-              <strong>拥堵状态：</strong>
-              <span style="color: ${congestionColor}; font-weight: bold;">
-                ${congestionStatus}
-                ${typeof congestionIndex === 'number' && !isNaN(congestionIndex) ? `(${congestionIndex.toFixed(1)})` : ''}
-              </span>
-            </p>
-          </div>
-        </div>
-      `,
-      offset: new window.AMap.Pixel(0, -30)
-    });
-    infoWindow.open(mapInstanceRef.current, e.lnglat);
-    setSelectedRoadId(road.ID);
-    addDebugInfo(`点击路段: ${road.ID}`);
-  }, [selectedTime, addDebugInfo]);
-
   // 更新路段样式
   const updateRoadStyle = useCallback((roadId: string, polyline: any) => {
     const road = parsedRoadData.find(r => r.ID === roadId);
@@ -472,122 +451,128 @@ function App() {
           zooms: [3, 20]
         });
 
-        mapInstanceRef.current = map;
-        addDebugInfo('地图实例创建成功');
+        // 等待地图加载完成
+        map.on('complete', () => {
+          if (!isInitializing) return;
+          
+          mapInstanceRef.current = map;
+          addDebugInfo('地图实例创建成功');
 
-        // 添加地图控件
-        map.addControl(new window.AMap.ToolBar({ position: 'RB' }));
-        map.addControl(new window.AMap.Scale({ position: 'LB' }));
-        map.addControl(new window.AMap.MapType({ position: 'RT' }));
-        map.addControl(new window.AMap.HawkEye({ isOpen: false, position: 'RB' }));
-        map.addControl(new window.AMap.Geolocation({ position: 'RB' }));
-        addDebugInfo('地图控件添加完成');
+          // 添加地图控件
+          map.addControl(new window.AMap.ToolBar({ position: 'RB' }));
+          map.addControl(new window.AMap.Scale({ position: 'LB' }));
+          map.addControl(new window.AMap.MapType({ position: 'RT' }));
+          map.addControl(new window.AMap.HawkEye({ isOpen: false, position: 'RB' }));
+          map.addControl(new window.AMap.Geolocation({ position: 'RB' }));
+          addDebugInfo('地图控件添加完成');
 
-        // 批量创建路段
-        const totalRoads = parsedRoadData.length;
-        addDebugInfo(`开始添加路段，总数: ${totalRoads}`);
-        
-        if (totalRoads === 0) {
-          addDebugInfo('警告: 没有路段数据可添加');
-          setLoading(false);
-          return;
-        }
+          // 批量创建路段
+          const totalRoads = parsedRoadData.length;
+          addDebugInfo(`开始添加路段，总数: ${totalRoads}`);
+          
+          if (totalRoads === 0) {
+            addDebugInfo('警告: 没有路段数据可添加');
+            setLoading(false);
+            return;
+          }
 
-        const batchSize = 20;
-        let processedCount = 0;
-        let isProcessing = true;
+          const batchSize = 20;
+          let processedCount = 0;
+          let isProcessing = true;
 
-        const processBatch = (startIndex: number) => {
-          if (!isProcessing || !isInitializing) return;
-
-          const endIndex = Math.min(startIndex + batchSize, totalRoads);
-          const batch = parsedRoadData.slice(startIndex, endIndex);
-          addDebugInfo(`处理第 ${startIndex + 1} 到 ${endIndex} 条路段`);
-
-          batch.forEach((road) => {
+          const processBatch = (startIndex: number) => {
             if (!isProcessing || !isInitializing) return;
 
-            try {
-              if (road.segments && road.segments.length > 0 && mapInstanceRef.current) {
-                road.segments.forEach((segment, index) => {
-                  if (segment.length >= 2) {
-                    const validCoordinates = segment.filter(coord => 
-                      Array.isArray(coord) && 
-                      coord.length === 2 && 
-                      !isNaN(coord[0]) && 
-                      !isNaN(coord[1]) &&
-                      coord[0] >= 73 && coord[0] <= 135 &&
-                      coord[1] >= 18 && coord[1] <= 53
-                    );
+            const endIndex = Math.min(startIndex + batchSize, totalRoads);
+            const batch = parsedRoadData.slice(startIndex, endIndex);
+            addDebugInfo(`处理第 ${startIndex + 1} 到 ${endIndex} 条路段`);
 
-                    if (validCoordinates.length < 2) {
-                      addDebugInfo(`警告: 路段 ${road.NAME} 的线段 ${index + 1} 没有足够的有效坐标点`);
-                      return;
-                    }
+            batch.forEach((road) => {
+              if (!isProcessing || !isInitializing) return;
 
-                    const polyline = new window.AMap.Polyline({
-                      path: validCoordinates,
-                      strokeColor: '#FF4D4F',
-                      strokeWeight: 5,
-                      strokeOpacity: 0.9,
-                      borderWeight: 2,
-                      strokeStyle: 'solid',
-                      lineJoin: 'round',
-                      lineCap: 'round',
-                      zIndex: 50,
-                      showDir: true,
-                      dirColor: '#FF7875',
-                      isOutline: true,
-                      outlineColor: '#FFFFFF',
-                      extData: {
-                        id: road.ID,
-                        name: road.NAME,
-                        direction: road.DIRECTION,
-                        fname: road.FNAME,
-                        tname: road.TNAME,
-                        length: road.LENGTH,
-                        segmentIndex: index
+              try {
+                if (road.segments && road.segments.length > 0 && mapInstanceRef.current) {
+                  road.segments.forEach((segment, index) => {
+                    if (segment.length >= 2) {
+                      const validCoordinates = segment.filter(coord => 
+                        Array.isArray(coord) && 
+                        coord.length === 2 && 
+                        !isNaN(coord[0]) && 
+                        !isNaN(coord[1]) &&
+                        coord[0] >= 73 && coord[0] <= 135 &&
+                        coord[1] >= 18 && coord[1] <= 53
+                      );
+
+                      if (validCoordinates.length < 2) {
+                        addDebugInfo(`警告: 路段 ${road.NAME} 的线段 ${index + 1} 没有足够的有效坐标点`);
+                        return;
                       }
-                    });
 
-                    polyline.setMap(mapInstanceRef.current);
-                    
-                    const polylineKey = `${road.ID}-${index}`;
-                    polylinesRef.current[polylineKey] = polyline;
-                    
-                    addDebugInfo(`成功添加路段: ${road.NAME} 的线段 ${index + 1}, 坐标点数量: ${validCoordinates.length}`);
+                      const polyline = new window.AMap.Polyline({
+                        path: validCoordinates,
+                        strokeColor: '#FF4D4F',
+                        strokeWeight: 5,
+                        strokeOpacity: 0.9,
+                        borderWeight: 2,
+                        strokeStyle: 'solid',
+                        lineJoin: 'round',
+                        lineCap: 'round',
+                        zIndex: 50,
+                        showDir: true,
+                        dirColor: '#FF7875',
+                        isOutline: true,
+                        outlineColor: '#FFFFFF',
+                        extData: {
+                          id: road.ID,
+                          name: road.NAME,
+                          direction: road.DIRECTION,
+                          fname: road.FNAME,
+                          tname: road.TNAME,
+                          length: road.LENGTH,
+                          segmentIndex: index
+                        }
+                      });
 
-                    polyline.on('mouseover', () => handleMouseOver(road.ID));
-                    polyline.on('mouseout', () => handleMouseOut(road.ID));
-                    polyline.on('click', (e: MapEvent) => handleRoadClick(road, polyline, e));
-                  }
-                });
-              } else {
-                addDebugInfo(`警告: 路段 ${road.NAME} 没有有效的坐标数据或地图实例不可用`);
+                      polyline.setMap(mapInstanceRef.current);
+                      
+                      const polylineKey = `${road.ID}-${index}`;
+                      polylinesRef.current[polylineKey] = polyline;
+                      
+                      addDebugInfo(`成功添加路段: ${road.NAME} 的线段 ${index + 1}, 坐标点数量: ${validCoordinates.length}`);
+
+                      // 使用 ref 中的回调函数
+                      polyline.on('mouseover', () => callbacksRef.current.handleMouseOver(road.ID));
+                      polyline.on('mouseout', () => callbacksRef.current.handleMouseOut(road.ID));
+                      polyline.on('click', (e: any) => callbacksRef.current.handleRoadClick(road, polyline, e));
+                    }
+                  });
+                } else {
+                  addDebugInfo(`警告: 路段 ${road.NAME} 没有有效的坐标数据或地图实例不可用`);
+                }
+              } catch (error) {
+                addDebugInfo(`错误: 处理路段 ${road.NAME} 时出错: ${error instanceof Error ? error.message : '未知错误'}`);
               }
-            } catch (error) {
-              addDebugInfo(`错误: 处理路段 ${road.NAME} 时出错: ${error instanceof Error ? error.message : '未知错误'}`);
+            });
+
+            processedCount += batch.length;
+            const progress = Math.round((processedCount / totalRoads) * 100);
+            setLoadingProgress(progress);
+            addDebugInfo(`路段添加进度: ${progress}%`);
+
+            if (endIndex < totalRoads && isProcessing && isInitializing) {
+              requestAnimationFrame(() => processBatch(endIndex));
+            } else {
+              if (isInitializing) {
+                updateRoadStyles(selectedTime);
+                setLoading(false);
+                setMapLoaded(true);
+                addDebugInfo('地图初始化完成');
+              }
             }
-          });
+          };
 
-          processedCount += batch.length;
-          const progress = Math.round((processedCount / totalRoads) * 100);
-          setLoadingProgress(progress);
-          addDebugInfo(`路段添加进度: ${progress}%`);
-
-          if (endIndex < totalRoads && isProcessing && isInitializing) {
-            requestAnimationFrame(() => processBatch(endIndex));
-          } else {
-            if (isInitializing) {
-              updateRoadStyles(selectedTime);
-              setLoading(false);
-              setMapLoaded(true);
-              addDebugInfo('地图初始化完成');
-            }
-          }
-        };
-
-        processBatch(0);
+          processBatch(0);
+        });
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : '地图初始化失败';
@@ -607,7 +592,7 @@ function App() {
       }
       polylinesRef.current = {};
     };
-  }, [parsedRoadData, addDebugInfo, handleRoadClick, handleMouseOver, handleMouseOut, updateRoadStyles]);
+  }, [parsedRoadData, selectedTime]); // 只保留必要的依赖项
 
   return (
     <div className="app-container">
